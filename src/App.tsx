@@ -10,7 +10,7 @@ import {
   Edit,
   Trash2
 } from 'lucide-react';
-import { supabase } from './supabaseClient'; // <- IMPORTANTE
+import { supabase } from './supabaseClient';
 
 interface Activity {
   id: string;
@@ -38,13 +38,17 @@ function App() {
   const [cardNumber, setCardNumber] = useState('');
   const [responsible, setResponsible] = useState('');
 
-  // Estado de filtros
+  // Estado para filtros da listagem
   const [filters, setFilters] = useState<Filters>({
     startDate: '',
     endDate: '',
     cardNumber: '',
     responsible: ''
   });
+
+  // Estados para resumo: data e responsável para filtrar o resumo diário
+  const [selectedSummaryDate, setSelectedSummaryDate] = useState('');
+  const [selectedSummaryResponsible, setSelectedSummaryResponsible] = useState('');
 
   // Paginação
   const [currentPage, setCurrentPage] = useState(1);
@@ -64,14 +68,14 @@ function App() {
       const { data, error } = await supabase
         .from('activities')
         .select('*')
-        .order('date', { ascending: false }); // ajusta se quiser outra ordenação
+        .order('date', { ascending: false });
 
       if (error) {
         console.error('Erro ao buscar atividades:', error);
         return;
       }
       if (data) {
-        // Mapeia os dados para converter "cardnumber" (campo do banco em minúsculo)
+        // Mapeia os dados para converter "cardnumber" (do banco em minúsculo)
         // para "cardNumber" conforme sua interface
         const formattedData = data.map((activity: any) => ({
           ...activity,
@@ -93,16 +97,29 @@ function App() {
     setEditingActivityId(null);
   };
 
+  // Função para calcular o total de duração (em minutos) para uma data e responsável específicos
+  const getTotalDurationForFilter = (selectedDate: string, selectedResp: string) => {
+    return activities
+      .filter(activity => {
+        const dateMatch = selectedDate ? activity.date === selectedDate : true;
+        const responsibleMatch = selectedResp
+          ? activity.responsible.toLowerCase().includes(selectedResp.toLowerCase())
+          : true;
+        return dateMatch && responsibleMatch;
+      })
+      .reduce((sum, activity) => sum + activity.duration, 0);
+  };
+
   // Cria ou atualiza a atividade
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Monta o objeto para inserir/atualizar usando "cardnumber" em minúsculo
+    // Monta o objeto para inserir/atualizar usando "cardnumber" (minúsculo)
     const activityData = {
       date,
       duration: parseInt(duration, 10),
       description,
-      cardnumber: cardNumber, // Alterado para minúsculo, conforme a coluna do DB
+      cardnumber: cardNumber,
       responsible
     };
 
@@ -150,7 +167,6 @@ function App() {
           console.error('Erro ao deletar atividade:', error);
           return;
         }
-        // Atualiza a listagem
         await fetchActivities();
       } catch (err) {
         console.error('Erro desconhecido ao deletar atividade:', err);
@@ -168,7 +184,7 @@ function App() {
     setResponsible(activity.responsible);
   };
 
-  // Aplica filtros às atividades no front-end
+  // Aplica filtros à listagem no front-end
   const filteredActivities = activities.filter((activity) => {
     const dateInRange =
       (!filters.startDate || activity.date >= filters.startDate) &&
@@ -231,6 +247,14 @@ function App() {
     });
   };
 
+  // Calcula o total de minutos filtrando por data e responsável
+  const totalMinutes =
+    selectedSummaryDate || selectedSummaryResponsible
+      ? getTotalDurationForFilter(selectedSummaryDate, selectedSummaryResponsible)
+      : 0;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header Profissional */}
@@ -239,6 +263,38 @@ function App() {
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Seção de Resumo Diário com Data e Responsável */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Daily Summary</h2>
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="flex items-center">
+              <Calendar className="mr-2 text-gray-400 h-5 w-5" />
+              <input
+                type="date"
+                value={selectedSummaryDate}
+                onChange={(e) => setSelectedSummaryDate(e.target.value)}
+                className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center">
+              <User className="mr-2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                value={selectedSummaryResponsible}
+                onChange={(e) => setSelectedSummaryResponsible(e.target.value)}
+                placeholder="Responsible"
+                className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+            {(selectedSummaryDate || selectedSummaryResponsible) && (
+              <p className="text-gray-700">
+                Total Worked: {hours} {hours === 1 ? 'hour' : 'hours'} and {minutes}{' '}
+                {minutes === 1 ? 'minute' : 'minutes'}
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Card do formulário */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">
